@@ -21,6 +21,7 @@
 #include "PayLoadCont.h"
 #include <map>
 #include <fmt/format.h>
+#include <iomanip>
 
 #include "ITSMFTReconstruction/PixelData.h"
 #include "ITSMFTReconstruction/DecodingStat.h"
@@ -105,6 +106,7 @@ class AlpideCoder
   static constexpr uint32_t DATASHORT = 0x4000; // flag for DATASHORT
   static constexpr uint32_t BUSYOFF = 0xf0;     // flag for BUSY_OFF
   static constexpr uint32_t BUSYON = 0xf1;      // flag for BUSY_ON
+  static constexpr uint32_t ERROR_MASK = 0xf0;  // flag for all error triggers
 
   // true if corresponds to DATALONG or DATASHORT: highest bit must be 0
   static bool isData(uint16_t v) { return (v & (0x1 << 15)) == 0; }
@@ -443,6 +445,122 @@ class AlpideCoder
       seenChips.push_back(chipData.getChipID());
     }
     return chipData.getData().size();
+  }
+
+  /// Verifies the decoder by comparing the contents a cable by re-encoding seen
+  /// chips back into the ALPIDE format.
+  template <typename LG>
+  static bool verifyDecodedCable(
+      std::map<int, ChipPixelData *> & seenChips, PayLoadCont & buffer,
+      std::vector<uint16_t> & seenChipIDs, LG lidGetter) {
+    PayLoadCont reconstructedData;
+
+    // Ensure the length of the reconstructed buffer.
+    int bufferLength = 0;
+    for (auto it = seenChips.begin(); it != seenChips.end(); ++it) {
+      bufferLength += it->second->getData().size();
+    }
+    bufferLength += seenChipIDs.size() * 2;
+    reconstructedData.ensureFreeCapacity(40 * bufferLength);
+
+    // Encode the seen chips in the order they were decoded.
+    for (int ID : seenChipIDs) {
+      ChipPixelData currentChip;
+      int localID = lidGetter(ID);
+      if (seenChips.count(ID)) {
+        currentChip = *seenChips[ID];
+      }
+      AlpideCoder encoder;
+      encoder.encodeChip(reconstructedData, currentChip, localID,
+                         /*dummy bc*/ 0, currentChip.getROFlags());
+    }
+
+    // Pad the end of the reconstructed buffer with the zero bytes.
+    if (buffer.getSize() > reconstructedData.getSize())
+      reconstructedData.fill(0x00,
+                             buffer.getSize() - reconstructedData.getSize());
+
+    auto reportError = [&](std::string message) {
+      LOG(error) << "Error during decoder verification: " << message;
+      LOG(warning) << "Raw Data:";
+      buffer.rewind();
+      uint8_t dataC = 0;
+      int index = 1;
+      while (buffer.next(dataC)) {
+        LOG(warning) << index << ". 0x" << std::setfill('0') << std::setw(2)
+                     << std::hex << std::uppercase << (0xFF & dataC);
+        ++index;
+      }
+      LOG(warning) << "Reconstructed Data:";
+      reconstructedData.rewind();
+      index = 1;
+      while (reconstructedData.next(dataC)) {
+        LOG(warning) << index << ". 0x" << std::setfill('0') << std::setw(2)
+                     << std::hex << std::uppercase << (0xFF & dataC);
+        ++index;
+      }
+    };
+
+    // The reconstructed buffer is very similar to the original data flow
+    // with the exception to several pieces of information that get lost
+    // during the decoding:
+    // 1. Error trigger words: these are absent in the reconstructed buffer.
+    //    In case of BUSYON/BUSYOFF words, the verification is allowed to
+    //    continue.
+    // 2. Bunch counter for frame: the reconstructed buffer does contain the
+    //    corresponding words, but has a dummy value.
+
+    buffer.rewind();
+    while (true) {
+      uint8_t dataRec = 0;
+      uint8_t dataRaw = 0;
+
+      if (!buffer.next(dataRaw)) {
+        if (!reconstructedData.isEmpty()) {
+          reportError(
+              "Raw data buffer is shorter than the reconstructed buffer.");
+          return false;
+        }
+        break;
+      }
+      if (dataRaw == BUSYON || dataRaw == BUSYOFF) {
+        // Placement of BUSYON and BUSYOFF triggers is arbitrary, just ignore.
+        continue;
+      }
+      if ((dataRaw & ERROR_MASK) == ERROR_MASK) {
+        // Placement of error triggers is arbitrary and we cannot guarantee
+        // the decoder to have processed the rest of the stream.
+        return false;
+      }
+      if (!reconstructedData.next(dataRec)) {
+        reportError(
+            "Reconstructed data buffer is shorter than the raw buffer.");
+        return false;
+      }
+
+      // If the read bytes is not related to the special cases, compare
+      // them directly.
+      if (dataRaw != dataRec) {
+        std::stringstream errorStream;
+        errorStream << "Unexpected byte mismatch during decoder verification. "
+                       "Expected: 0x"
+                    << std::hex << std::uppercase << std::setfill('0')
+                    << std::setw(2) << (0xFF & dataRaw) << ", Reconstructed: 0x"
+                    << std::setfill('0') << std::setw(2) << (0xFF & dataRec);
+        reportError(errorStream.str());
+        return false;
+      }
+
+      // If the data correspond to the CHIPHEADER or CHIPEMPTY data words,
+      // skip the next byte that represent bunch counters.
+      if ((dataRaw & (~MaskChipID)) == CHIPHEADER ||
+          (dataRaw & (~MaskChipID)) == CHIPEMPTY) {
+        buffer.next(dataRaw);
+        reconstructedData.next(dataRec);
+        continue;
+      }
+    }
+    return true;
   }
 
   /// check if the byte corresponds to chip_header or chip_empty flag
