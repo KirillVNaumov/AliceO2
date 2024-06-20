@@ -451,8 +451,9 @@ class AlpideCoder
   /// chips back into the ALPIDE format.
   template <typename LG>
   static bool verifyDecodedCable(
-      std::map<int, ChipPixelData *> & seenChips, PayLoadCont & buffer,
-      std::vector<uint16_t> & seenChipIDs, LG lidGetter) {
+    std::map<int, ChipPixelData*>& seenChips, PayLoadCont& buffer,
+    std::vector<uint16_t>& seenChipIDs, LG lidGetter)
+  {
     PayLoadCont reconstructedData;
 
     // Ensure the length of the reconstructed buffer.
@@ -518,7 +519,7 @@ class AlpideCoder
       if (!buffer.next(dataRaw)) {
         if (!reconstructedData.isEmpty()) {
           reportError(
-              "Raw data buffer is shorter than the reconstructed buffer.");
+            "Raw data buffer is shorter than the reconstructed buffer.");
           return false;
         }
         break;
@@ -534,7 +535,7 @@ class AlpideCoder
       }
       if (!reconstructedData.next(dataRec)) {
         reportError(
-            "Reconstructed data buffer is shorter than the raw buffer.");
+          "Reconstructed data buffer is shorter than the raw buffer.");
         return false;
       }
 

@@ -142,25 +142,26 @@ class ChipMappingITS
   }
 
   ///< get chipID on module from chip global SW ID, cable SW ID and stave (RU) info
-  uint16_t getLocalChipID(uint16_t globalID, int cableHW, const RUInfo &ruInfo)
-      const {
+  uint16_t getLocalChipID(uint16_t globalID, int cableHW, const RUInfo& ruInfo)
+    const
+  {
     if (cableHW <= MaxHWCableID[ruInfo.ruType] && globalID != 0xffff) {
       uint16_t chipOnRU = globalID - ruInfo.firstChipIDSW;
       switch (ruInfo.ruType) {
-      case IB:
-        return chipOnRU;
-      case MB:
-        for (int ihw = 0; ihw < 15; ihw++) {
-          if (HWCableHWChip2ChipOnRU_MB[cableHW][ihw] == chipOnRU)
-            return ihw;
-        }
-        break;
-      case OB:
-        for (int ihw = 0; ihw < 15; ihw++) {
-          if (HWCableHWChip2ChipOnRU_OB[cableHW][ihw] == chipOnRU)
-            return ihw;
-        }
-        break;
+        case IB:
+          return chipOnRU;
+        case MB:
+          for (int ihw = 0; ihw < 15; ihw++) {
+            if (HWCableHWChip2ChipOnRU_MB[cableHW][ihw] == chipOnRU)
+              return ihw;
+          }
+          break;
+        case OB:
+          for (int ihw = 0; ihw < 15; ihw++) {
+            if (HWCableHWChip2ChipOnRU_OB[cableHW][ihw] == chipOnRU)
+              return ihw;
+          }
+          break;
       }
     }
     return 0xffff;
@@ -169,21 +170,22 @@ class ChipMappingITS
   ///< get chip global SW ID from chipID on module, cable SW ID and stave (RU)
   /// info
   uint16_t getGlobalChipID(uint16_t chOnModuleHW, int cableHW,
-                           const RUInfo &ruInfo) const {
+                           const RUInfo& ruInfo) const
+  {
     if (chOnModuleHW < MaxHWChipIDPerModuleSB[ruInfo.ruType] &&
         cableHW <= MaxHWCableID[ruInfo.ruType]) {
       uint16_t chipOnRU = 0xff;
       switch (ruInfo.ruType) {
-      case IB:
-        if (cableHW == chOnModuleHW)
-          chipOnRU = cableHW;
-        break;
-      case MB:
-        chipOnRU = HWCableHWChip2ChipOnRU_MB[cableHW][chOnModuleHW];
-        break;
-      case OB:
-        chipOnRU = HWCableHWChip2ChipOnRU_OB[cableHW][chOnModuleHW];
-        break;
+        case IB:
+          if (cableHW == chOnModuleHW)
+            chipOnRU = cableHW;
+          break;
+        case MB:
+          chipOnRU = HWCableHWChip2ChipOnRU_MB[cableHW][chOnModuleHW];
+          break;
+        case OB:
+          chipOnRU = HWCableHWChip2ChipOnRU_OB[cableHW][chOnModuleHW];
+          break;
       }
       return chipOnRU < 0xff ? ruInfo.firstChipIDSW + chipOnRU : 0xffff;
     }
