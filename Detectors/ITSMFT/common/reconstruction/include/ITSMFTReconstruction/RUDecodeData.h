@@ -65,7 +65,7 @@ struct RUDecodeData {
   }
   void setROFInfo(ChipPixelData* chipData, const GBTLink* lnk);
   template <class Mapping>
-  int decodeROF(const Mapping& mp, const o2::InteractionRecord ir);
+  int decodeROF(const Mapping& mp, const o2::InteractionRecord ir, bool verifyDecoder);
   void fillChipStatistics(int icab, const ChipPixelData* chipData);
   void dumpcabledata(int icab);
   bool checkLinkInSync(int icab, const o2::InteractionRecord ir);
@@ -75,7 +75,7 @@ struct RUDecodeData {
 ///_________________________________________________________________
 /// decode single readout frame, the cable's data must be filled in advance via GBTLink::collectROFCableData
 template <class Mapping>
-int RUDecodeData::decodeROF(const Mapping& mp, const o2::InteractionRecord ir)
+int RUDecodeData::decodeROF(const Mapping& mp, const o2::InteractionRecord ir, bool verifyDecoder)
 {
   nChipsFired = 0;
   lastChipChecked = 0;
@@ -98,11 +98,21 @@ int RUDecodeData::decodeROF(const Mapping& mp, const o2::InteractionRecord ir)
       auto chip = mp.getGlobalChipID(cid, cabHW, *this->ruInfo);
       return chip;
     };
+    auto localChipIdGetter = [this, &mp, cabHW](int gid) {
+      auto localID = mp.getLocalChipID(gid, cabHW, *this->ruInfo);
+      return localID;
+    };
+
     int ret = 0;
     // dumpcabledata(icab);
 
-    while ((ret = AlpideCoder::decodeChip(*chipData, cableData[icab], seenChipIDs, chIdGetter)) || chipData->isErrorSet()) { // we register only chips with hits or errors flags set
+    std::vector<uint16_t> seenChipIDsInCable;
+    std::map<int, ChipPixelData*> seenChips;
+    while ((ret = AlpideCoder::decodeChip(*chipData, cableData[icab], seenChipIDsInCable, chIdGetter)) || chipData->isErrorSet()) { // we register only chips with hits or errors flags set
       setROFInfo(chipData, cableLinkPtr[icab]);
+      if (verifyDecoder) {
+        seenChips[chipData->getChipID()] = chipData;
+      }
       auto nhits = chipData->getData().size();
       if (nhits && doneChips[chipData->getChipID()]) {
         if (chipData->getChipID() == chipsData[nChipsFired - 1].getChipID()) {
@@ -132,6 +142,12 @@ int RUDecodeData::decodeROF(const Mapping& mp, const o2::InteractionRecord ir)
         break; // negative code was returned by decoder: abandon cable data
       }
     }
+    if (verifyDecoder) {
+      AlpideCoder::verifyDecodedCable(seenChips, cableData[icab],
+                                      seenChipIDsInCable, localChipIdGetter);
+    }
+    seenChipIDs.insert(seenChipIDs.end(), seenChipIDsInCable.begin(),
+                       seenChipIDsInCable.end());
     cableData[icab].clear();
   }
   return ntot;
