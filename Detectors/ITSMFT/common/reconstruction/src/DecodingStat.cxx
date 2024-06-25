@@ -93,7 +93,8 @@ void ChipStat::print(bool skipNoErr, const std::string& pref) const
 
 ///_________________________________________________________________
 /// print chip decoding statistics
-std::string ChipStat::reportErrors(const ChipPixelData& d) {
+std::string ChipStat::reportErrors(const ChipPixelData& d)
+{
   std::string res;
   for (int i = NErrorsDefined; i--;) {
     if (d.getErrorFlags() & (0x1UL << i)) {
