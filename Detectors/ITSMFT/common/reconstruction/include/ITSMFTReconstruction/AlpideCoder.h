@@ -526,7 +526,7 @@ class AlpideCoder
         if (reconstructedData.isEmpty() && buffer.isEmpty()) {
           break;
         }
-        PayLoadCont &nonEmptyBuffer =
+        PayLoadCont& nonEmptyBuffer =
           !buffer.isEmpty() ? buffer : reconstructedData;
         uint8_t dataC = 0;
         while (nonEmptyBuffer.next(dataC)) {
