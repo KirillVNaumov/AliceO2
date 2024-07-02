@@ -243,7 +243,7 @@ class ChipPixelData
     }
   }
 
-  template<typename Func>
+  template <typename Func>
   void forEachSetError(Func f) const
   {
     auto outer = [&](int errIdx) {
