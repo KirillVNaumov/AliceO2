@@ -480,9 +480,6 @@ class AlpideCoder
       ChipPixelData currentChip;
       int localID = lidGetter(ID);
       if (seenChips.count(ID)) {
-        if (seenChips[ID]->isErrorSet()) {
-          continue;
-        }
         currentChip = *seenChips[ID];
       }
       AlpideCoder encoder;
@@ -525,6 +522,7 @@ class AlpideCoder
     // 2. Bunch counter for frame: the reconstructed buffer does contain the
     //    corresponding words, but has a dummy value.
 
+    ChipPixelData* currentChip = nullptr;
     buffer.rewind();
     while (true) {
       uint8_t dataRec = 0;
@@ -554,6 +552,12 @@ class AlpideCoder
       if (dataRaw == dataRec) {
         if ((dataRaw & (~MaskChipID)) == CHIPHEADER ||
             (dataRaw & (~MaskChipID)) == CHIPEMPTY) {
+          uint16_t ID = cidGetter(dataRaw & MaskChipID);
+          if (seenChips.count(ID)) {
+            currentChip = seenChips[ID];
+          } else {
+            currentChip = nullptr;
+          }
           // If the data correspond to the CHIPHEADER or CHIPEMPTY data words,
           // skip the next byte that represent bunch counters.
           buffer.next(dataRaw);
@@ -564,46 +568,105 @@ class AlpideCoder
         continue;
       }
 
-      if (dataRaw == BUSYON || dataRaw == BUSYOFF) {
-        // Placement of BUSYON and BUSYOFF triggers is arbitrary, just ignore
-        // the byte in the raw stream and move forward.
-        buffer.next(dataRaw);
-        continue;
-      }
-      if ((dataRaw & ERROR_MASK) == ERROR_MASK) {
-        // Placement of error triggers is arbitrary and we cannot guarantee
-        // the decoder to have processed the rest of the stream.
-        return false;
-      }
-
-      if ((dataRaw & (~MaskChipID)) == CHIPHEADER) {
-        // If we encounter a mismatch when the raw data is at the beginning
-        // of the next chip, it might indicate the fact that an error occured
-        // during the decoding of this chip. In this case, we cannot continue
-        // the byte stream verification after this point.
-        uint16_t ID = cidGetter(dataRaw & MaskChipID);
-        if (seenChips.count(ID) && seenChips[ID]->isErrorSet()) {
-          LOG(warning) << "Chip " << ID
-                       << " could not be verified due to set errors: "
-                       << seenChips[ID]->reportErrors();
-          // TODO: Instead of returning, we can skip the part of the buffer
-          // that describes this chip and continue with the verification of
-          // the next one.
+      VerifierMismatchResult res =
+          handleVerifierMismatch(buffer, reconstructedData, currentChip);
+      switch (res) {
+        case VerifierMismatchResult::CONTINUE:
+          LOG(warning) << "handleVerifierMismatch: CONTINUE";
+          continue;
+        case VerifierMismatchResult::EXPECTED_MISMATCH:
+          // Report?
+          LOG(warning) << "handleVerifierMismatch: EXPECTED_MISMATCH, stopping "
+                          "verification";
           return true;
+        case VerifierMismatchResult::UNEXPECTED_MISMATCH: {
+          // If the read bytes is not related to the special cases, report error.
+          std::stringstream errorStream;
+          errorStream << "Unexpected byte mismatch during decoder verification. "
+                         "Expected: 0x"
+                      << std::hex << std::uppercase << std::setfill('0')
+                      << std::setw(2) << (0xFF & dataRaw) << ", Reconstructed: 0x"
+                      << std::setfill('0') << std::setw(2) << (0xFF & dataRec);
+          reportError(errorStream.str());
         }
       }
-
-      // If the read bytes is not related to the special cases, report error.
-      std::stringstream errorStream;
-      errorStream << "Unexpected byte mismatch during decoder verification. "
-                     "Expected: 0x"
-                  << std::hex << std::uppercase << std::setfill('0')
-                  << std::setw(2) << (0xFF & dataRaw) << ", Reconstructed: 0x"
-                  << std::setfill('0') << std::setw(2) << (0xFF & dataRec);
-      reportError(errorStream.str());
       return false;
     }
     return true;
+  }
+
+  enum VerifierMismatchResult {
+    UNEXPECTED_MISMATCH,    // Genuine mismatch, stop verification
+    EXPECTED_MISMATCH,      // Mismatch expected, but need to abort verification of the chip
+    CONTINUE                // Mismatch resolved, can continue
+  };
+
+  static VerifierMismatchResult handleVerifierMismatch(
+      PayLoadCont & buffer, PayLoadCont & reconstructedData,
+      ChipPixelData * currentChip)
+  {
+    if (!currentChip)
+      return VerifierMismatchResult::UNEXPECTED_MISMATCH;
+    VerifierMismatchResult res = VerifierMismatchResult::UNEXPECTED_MISMATCH;
+    uint8_t dataRec = 0;
+    uint8_t dataRaw = 0;
+    reconstructedData.current(dataRec);
+    buffer.current(dataRaw);
+    auto inner = [&](int errIdx) {
+      if (res != VerifierMismatchResult::UNEXPECTED_MISMATCH) {
+        // The mismatch was resolved, no need to check the rest of the errors
+        return;
+      }
+      switch (errIdx) {
+        case ChipStat::BusyViolation:
+        case ChipStat::DataOverrun:
+        case ChipStat::Fatal:
+          break;
+        case ChipStat::BusyOn:
+        case ChipStat::BusyOff:
+          if (dataRaw == BUSYON || dataRaw == BUSYOFF) {
+            // Placement of BUSYON and BUSYOFF triggers is arbitrary, just ignore
+            // the byte in the raw stream and move forward.
+            buffer.next(dataRaw);
+            res = VerifierMismatchResult::CONTINUE;
+          }
+          break;
+        case ChipStat::TruncatedChipEmpty:
+        case ChipStat::TruncatedChipHeader:
+        case ChipStat::TruncatedRegion:
+        case ChipStat::TruncatedLondData:
+        case ChipStat::WrongDataLongPattern:
+        case ChipStat::NoDataFound:
+        case ChipStat::UnknownWord:
+        case ChipStat::RepeatingPixel:
+        case ChipStat::WrongRow:
+        case ChipStat::APE_STRIP_START:
+        case ChipStat::APE_ILLEGAL_CHIPID:
+        case ChipStat::APE_DET_TIMEOUT:
+        case ChipStat::APE_OOT:
+        case ChipStat::APE_PROTOCOL_ERROR:
+        case ChipStat::APE_LANE_FIFO_OVERFLOW_ERROR:
+        case ChipStat::APE_FSM_ERROR:
+        case ChipStat::APE_PENDING_DETECTOR_EVENT_LIMIT:
+        case ChipStat::APE_PENDING_LANE_EVENT_LIMIT:
+        case ChipStat::APE_O2N_ERROR:
+        case ChipStat::APE_RATE_MISSING_TRG_ERROR:
+        case ChipStat::APE_PE_DATA_MISSING:
+        case ChipStat::APE_OOT_DATA_MISSING:
+        case ChipStat::WrongDColOrder:
+        case ChipStat::InterleavedChipData:
+        case ChipStat::TruncatedBuffer:
+        case ChipStat::TrailerAfterHeader:
+        case ChipStat::FlushedIncomplete:
+        case ChipStat::StrobeExtended:
+        case ChipStat::WrongAlpideChipID:
+          break;
+        default:
+          LOG(error) << "Unknown error set by chip during verifier mismatch";
+      }
+    };
+    currentChip->forEachSetError(inner);
+    return res;
   }
 
   /// check if the byte corresponds to chip_header or chip_empty flag
