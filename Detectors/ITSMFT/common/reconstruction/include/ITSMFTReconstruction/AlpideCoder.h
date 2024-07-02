@@ -569,7 +569,7 @@ class AlpideCoder
       }
 
       VerifierMismatchResult res =
-          handleVerifierMismatch(buffer, reconstructedData, currentChip);
+        handleVerifierMismatch(buffer, reconstructedData, currentChip);
       switch (res) {
         case VerifierMismatchResult::CONTINUE:
           LOG(warning) << "handleVerifierMismatch: CONTINUE";
@@ -596,14 +596,14 @@ class AlpideCoder
   }
 
   enum VerifierMismatchResult {
-    UNEXPECTED_MISMATCH,    // Genuine mismatch, stop verification
-    EXPECTED_MISMATCH,      // Mismatch expected, but need to abort verification of the chip
-    CONTINUE                // Mismatch resolved, can continue
+    UNEXPECTED_MISMATCH, // Genuine mismatch, stop verification
+    EXPECTED_MISMATCH,   // Mismatch expected, but need to abort verification of the chip
+    CONTINUE             // Mismatch resolved, can continue
   };
 
   static VerifierMismatchResult handleVerifierMismatch(
-      PayLoadCont & buffer, PayLoadCont & reconstructedData,
-      ChipPixelData * currentChip)
+    PayLoadCont& buffer, PayLoadCont& reconstructedData,
+    ChipPixelData* currentChip)
   {
     if (!currentChip)
       return VerifierMismatchResult::UNEXPECTED_MISMATCH;
