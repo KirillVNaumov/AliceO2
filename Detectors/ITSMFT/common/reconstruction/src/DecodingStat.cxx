@@ -33,7 +33,7 @@ uint32_t ChipStat::getNErrors() const
 
 ///_________________________________________________________________
 /// print link decoding statistics
-uint32_t ChipStat::addErrors(const ChipPixelData &d, int verbosity)
+uint32_t ChipStat::addErrors(const ChipPixelData& d, int verbosity)
 {
   uint32_t res = 0;
   if (d.getErrorFlags()) {
