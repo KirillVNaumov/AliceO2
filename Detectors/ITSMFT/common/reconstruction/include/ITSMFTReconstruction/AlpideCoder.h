@@ -594,10 +594,10 @@ class AlpideCoder
           // error.
           std::stringstream errorStream;
           errorStream
-              << "Unexpected byte mismatch during decoder verification. "
-                 "Expected: "
-              << hexToString(dataRaw)
-              << ", Reconstructed: " << hexToString(dataRec);
+            << "Unexpected byte mismatch during decoder verification. "
+               "Expected: "
+            << hexToString(dataRaw)
+            << ", Reconstructed: " << hexToString(dataRec);
           reportError(errorStream.str());
         }
       }
