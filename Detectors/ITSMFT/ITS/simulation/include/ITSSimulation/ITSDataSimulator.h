@@ -23,16 +23,14 @@ namespace itsmft
 
 class ITSDataSimulator
 {
-public:
+ public:
   const static uint32_t MaxChipID = 24119;
   const static uint32_t MaxPixelsPerChip =
-      SegmentationAlpide::NRows * SegmentationAlpide::NCols;
+    SegmentationAlpide::NRows * SegmentationAlpide::NCols;
 
   ITSDataSimulator(int32_t seed, uint32_t numberOfChips,
                    uint32_t maxPixelsPerChip, bool doDigits, bool doErrors)
-      : mSeed(seed), mNumberOfChips(numberOfChips),
-        mMaxPixelsPerChip(maxPixelsPerChip), mDoDigits(doDigits),
-        mDoErrors(doErrors)
+    : mSeed(seed), mNumberOfChips(numberOfChips), mMaxPixelsPerChip(maxPixelsPerChip), mDoDigits(doDigits), mDoErrors(doErrors)
   {
     srand(mSeed);
   }
@@ -44,7 +42,7 @@ public:
 
   void simulate();
 
-private:
+ private:
   int32_t mSeed;
   uint32_t mMaxPixelsPerChip;
   uint32_t mNumberOfChips;

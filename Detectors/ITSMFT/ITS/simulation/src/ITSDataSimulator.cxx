@@ -17,7 +17,7 @@
 
 #include <boost/program_options.hpp>
 #include <iostream>
-#include <string> 
+#include <string>
 
 namespace bpo = boost::program_options;
 using namespace o2::itsmft;
@@ -90,23 +90,23 @@ int main(int argc, char** argv)
     add_option("seed", bpo::value<int32_t>()->default_value(0),
                "random seed for data generation");
     add_option(
-        "max-pixels-per-chip", bpo::value<uint32_t>()->default_value(100),
-        ("maximum number of fired pixels per chip (0 - " +
-         std::to_string(ITSDataSimulator::MaxPixelsPerChip) +
-         ")")
-            .c_str());
+      "max-pixels-per-chip", bpo::value<uint32_t>()->default_value(100),
+      ("maximum number of fired pixels per chip (0 - " +
+       std::to_string(ITSDataSimulator::MaxPixelsPerChip) +
+       ")")
+        .c_str());
     add_option("number-of-chip", bpo::value<uint32_t>()->default_value(10),
                ("number of chips to be present in the data (0 - " +
                 std::to_string(ITSDataSimulator::MaxChipID) + ")")
-                   .c_str());
+                 .c_str());
     add_option("configKeyValues", bpo::value<std::string>()->default_value(""),
                "comma-separated configKeyValues");
 
     opt_all.add(opt_general).add(opt_hidden);
     bpo::store(bpo::command_line_parser(argc, argv)
-                   .options(opt_all)
-                   .positional(opt_pos)
-                   .run(),
+                 .options(opt_all)
+                 .positional(opt_pos)
+                 .run(),
                vm);
 
     if (vm.count("help")) {
@@ -139,9 +139,9 @@ int main(int argc, char** argv)
   }
 
   ITSDataSimulator simulator(
-      vm["seed"].as<int32_t>(), vm["number-of-chip"].as<uint32_t>(),
-      vm["max-pixels-per-chip"].as<uint32_t>(), vm["digits"].as<bool>(),
-      vm["enable-errors"].as<bool>());
+    vm["seed"].as<int32_t>(), vm["number-of-chip"].as<uint32_t>(),
+    vm["max-pixels-per-chip"].as<uint32_t>(), vm["digits"].as<bool>(),
+    vm["enable-errors"].as<bool>());
 
   simulator.simulate();
 }
